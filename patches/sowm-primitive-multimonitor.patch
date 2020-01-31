@@ -1,16 +1,18 @@
 diff --git a/Makefile b/Makefile
-index 8573837..72e9542 100644
+index 6a840ae..eb66fab 100644
 --- a/Makefile
 +++ b/Makefile
-@@ -1,5 +1,5 @@
- CFLAGS+= -std=c99 -Wall -Wextra -Wmissing-prototypes -pedantic
--LDADD+= -lX11
-+LDADD+= -lX11 -lXinerama
- LDFLAGS=
- PREFIX?= /usr
- BINDIR?= $(PREFIX)/bin
+@@ -10,7 +10,7 @@ config.h:
+ 	cp config.def.h config.h
+ 
+ sowm: sowm.o
+-	$(CC) $(LDFLAGS) -O3 -o $@ $+ -lX11
++	$(CC) $(LDFLAGS) -O3 -o $@ $+ -lX11 -lXinerama
+ 
+ install: all
+ 	install -Dm755 sowm $(DESTDIR)$(BINDIR)/sowm
 diff --git a/sowm.c b/sowm.c
-index 0cc1293..6f858a9 100644
+index 793826c..3934f9c 100644
 --- a/sowm.c
 +++ b/sowm.c
 @@ -4,6 +4,7 @@
@@ -21,16 +23,16 @@ index 0cc1293..6f858a9 100644
  #include <stdlib.h>
  #include <signal.h>
  #include <unistd.h>
-@@ -48,7 +49,7 @@ static void ws_go(const Arg arg);
- static int  xerror() { return 0;}
+@@ -11,7 +12,7 @@
+ #include "sowm.h"
  
  static client       *list = {0}, *ws_list[10] = {0}, *cur;
--static int          ws = 1, sw, sh, wx, wy, numlock;
-+static int          ws = 1, sw, sh, wx, wy, numlock, monitors;
+-static int          ws = 1, sw, sh, wx, wy, numlock = 0;
++static int          ws = 1, sw, sh, wx, wy, numlock = 0, monitors;
  static unsigned int ww, wh;
  
  static Display      *d;
-@@ -108,6 +109,7 @@ void notify_motion(XEvent *e) {
+@@ -60,6 +61,7 @@ void notify_motion(XEvent *e) {
          wy + (mouse.button == 1 ? yd : 0),
          ww + (mouse.button == 3 ? xd : 0),
          wh + (mouse.button == 3 ? yd : 0));
@@ -38,51 +40,66 @@ index 0cc1293..6f858a9 100644
  }
  
  void key_press(XEvent *e) {
-@@ -172,12 +174,35 @@ void win_kill() {
+@@ -124,11 +126,37 @@ void win_kill(const Arg arg) {
      if (cur) XKillClient(d, cur->w);
  }
  
-+int multimonitor_center_fs (int fs) {
++int multimonitor_action (int action) { // action = 0 -> center; action = 1 -> fs
 +    if (!XineramaIsActive(d)) return 1;
-+    XineramaScreenInfo *screen_info = XineramaQueryScreens(d, &monitors);
++    XineramaScreenInfo *si = XineramaQueryScreens(d, &monitors);
 +    for (int i = 0; i < monitors; i++) {
-+        if ((cur->wx >= screen_info[i].x_org && cur->wx < screen_info[i].x_org + screen_info[i].width)
-+            && (cur->wy >= screen_info[i].y_org && cur->wy < screen_info[i].y_org + screen_info[i].height)) {
-+            if (fs)
++        if ((cur->wx + (cur->ww/2) >= (unsigned int)si[i].x_org
++                && cur->wx + (cur->ww/2) < (unsigned int)si[i].x_org + si[i].width)
++            && ( cur->wy + (cur->wh/2) >= (unsigned int)si[i].y_org
++                && cur->wy + (cur->wh/2) < (unsigned int)si[i].y_org + si[i].height)) {
++            if (action)
 +                XMoveResizeWindow(d, cur->w,
-+                                  screen_info[i].x_org, screen_info[i].y_org,
-+                                  screen_info[i].width, screen_info[i].height);
++                                  si[i].x_org, si[i].y_org,
++                                  si[i].width, si[i].height);
 +            else
 +                XMoveWindow(d, cur->w,
-+                            screen_info[i].x_org + ((screen_info[i].width  - ww) / 2),
-+                            screen_info[i].y_org + ((screen_info[i].height - wh) / 2));
++                            si[i].x_org + ((si[i].width - ww)/2),
++                            si[i].y_org + ((si[i].height -wh)/2));
 +            break;
 +        }
 +    }
 +    return 0;
 +}
 +
- void win_center() {
+ void win_center(const Arg arg) {
      if (!cur) return;
  
      win_size(cur->w, &(int){0}, &(int){0}, &ww, &wh);
- 
 -    XMoveWindow(d, cur->w, (sw - ww) / 2, (sh - wh) / 2);
-+    if (multimonitor_center_fs(0))
++
++    if (multimonitor_action(0))
 +        XMoveWindow(d, cur->w, (sw - ww) / 2, (sh - wh) / 2);
 +
 +    win_size(cur->w, &cur->wx, &cur->wy, &cur->ww, &cur->wh);
  }
  
- void win_fs() {
-@@ -185,8 +210,8 @@ void win_fs() {
+ void win_fs(const Arg arg) {
+@@ -136,8 +164,9 @@ void win_fs(const Arg arg) {
  
      if ((cur->f = cur->f ? 0 : 1)) {
          win_size(cur->w, &cur->wx, &cur->wy, &cur->ww, &cur->wh);
 -        XMoveResizeWindow(d, cur->w, 0, 0, sw, sh);
--
-+        if(multimonitor_center_fs(1))
+ 
++        if (multimonitor_action(1))
 +            XMoveResizeWindow(d, cur->w, 0, 0, sw, sh);
      } else
          XMoveResizeWindow(d, cur->w, cur->wx, cur->wy, cur->ww, cur->wh);
  }
+diff --git a/sowm.h b/sowm.h
+index 750b297..f679715 100644
+--- a/sowm.h
++++ b/sowm.h
+@@ -32,6 +32,8 @@ typedef struct client {
+     Window w;
+ } client;
+ 
++int multimonitor_action(int action);
++
+ void button_press(XEvent *e);
+ void button_release(XEvent *e);
+ void configure_request(XEvent *e);
