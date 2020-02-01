@@ -13,7 +13,7 @@ index cae2009..a0d6c19 100644
  const char* term[]    = {"st",             0};
  const char* scrot[]   = {"scr",            0};
 diff --git a/sowm.c b/sowm.c
-index 958d321..9992f7d 100644
+index 793826c..460d28b 100644
 --- a/sowm.c
 +++ b/sowm.c
 @@ -17,6 +17,10 @@ static unsigned int ww, wh;
@@ -85,7 +85,15 @@ index 958d321..9992f7d 100644
  
      while(XCheckTypedEvent(d, MotionNotify, e));
  
-@@ -72,6 +116,14 @@ void key_press(XEvent *e) {
+@@ -60,6 +104,7 @@ void notify_motion(XEvent *e) {
+         wy + (mouse.button == 1 ? yd : 0),
+         ww + (mouse.button == 3 ? xd : 0),
+         wh + (mouse.button == 3 ? yd : 0));
++    configure_hb_for_window(cur->w);
+ }
+ 
+ void key_press(XEvent *e) {
+@@ -72,6 +117,14 @@ void key_press(XEvent *e) {
  }
  
  void button_press(XEvent *e) {
@@ -100,7 +108,7 @@ index 958d321..9992f7d 100644
      if (!e->xbutton.subwindow) return;
  
      win_size(e->xbutton.subwindow, &wx, &wy, &ww, &wh);
-@@ -81,6 +133,7 @@ void button_press(XEvent *e) {
+@@ -81,6 +134,7 @@ void button_press(XEvent *e) {
  
  void button_release(XEvent *e) {
      mouse.subwindow = 0;
@@ -108,7 +116,7 @@ index 958d321..9992f7d 100644
  }
  
  void win_add(Window w) {
-@@ -110,6 +163,8 @@ void win_del(Window w) {
+@@ -110,6 +164,8 @@ void win_del(Window w) {
  
      for win if (c->w == w) x = c;
  
@@ -117,7 +125,7 @@ index 958d321..9992f7d 100644
      if (!list || !x)  return;
      if (x->prev == x) list = 0;
      if (list == x)    list = x->next;
-@@ -129,6 +184,8 @@ void win_center(const Arg arg) {
+@@ -129,6 +185,8 @@ void win_center(const Arg arg) {
  
      win_size(cur->w, &(int){0}, &(int){0}, &ww, &wh);
      XMoveWindow(d, cur->w, (sw - ww) / 2, (sh - wh) / 2);
@@ -126,7 +134,7 @@ index 958d321..9992f7d 100644
  }
  
  void win_fs(const Arg arg) {
-@@ -137,9 +194,11 @@ void win_fs(const Arg arg) {
+@@ -137,9 +195,11 @@ void win_fs(const Arg arg) {
      if ((cur->f = cur->f ? 0 : 1)) {
          win_size(cur->w, &cur->wx, &cur->wy, &cur->ww, &cur->wh);
          XMoveResizeWindow(d, cur->w, 0, 0, sw, sh);
@@ -140,7 +148,7 @@ index 958d321..9992f7d 100644
  }
  
  void win_to_ws(const Arg arg) {
-@@ -156,6 +215,8 @@ void win_to_ws(const Arg arg) {
+@@ -156,6 +216,8 @@ void win_to_ws(const Arg arg) {
      XUnmapWindow(d, cur->w);
      ws_save(tmp);
  
@@ -149,7 +157,7 @@ index 958d321..9992f7d 100644
      if (list) win_focus(list);
  }
  
-@@ -189,6 +250,8 @@ void ws_go(const Arg arg) {
+@@ -189,6 +251,8 @@ void ws_go(const Arg arg) {
  
      ws_sel(arg.i);
  
@@ -158,7 +166,7 @@ index 958d321..9992f7d 100644
      if (list) win_focus(list); else cur = 0;
  }
  
-@@ -270,6 +333,10 @@ int main(void) {
+@@ -270,6 +334,10 @@ int main(void) {
      XDefineCursor(d, root, XCreateFontCursor(d, 68));
      input_grab(root);
  
@@ -170,7 +178,7 @@ index 958d321..9992f7d 100644
          if (events[ev.type]) events[ev.type](&ev);
  }
 diff --git a/sowm.h b/sowm.h
-index 4ae77f4..7844621 100644
+index 750b297..7e48f4b 100644
 --- a/sowm.h
 +++ b/sowm.h
 @@ -34,7 +34,9 @@ typedef struct client {
